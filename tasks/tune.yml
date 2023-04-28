@@ -1,0 +1,10 @@
+---
+- name: tune mysql
+  ini_file:
+    path: "{{ mysqlserver_config_path }}"
+    section: "{{ item.section|default('mysqld') }}"
+    option:  "{{ item.option }}"
+    value:   "{{ item.value }}"
+  loop: "{{ mysql_config }}"
+  tags: configure
+

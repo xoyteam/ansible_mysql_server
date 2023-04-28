@@ -1,0 +1,86 @@
+---
+# tasks for mysqlserver
+
+- name: credentials
+  become: no
+  file:
+    path: "{{ playbook_dir }}/credentials/{{ inventory_hostname }}"
+    state: directory
+    mode: 0700
+  delegate_to: 127.0.0.1
+
+- name: Set MySQL repo config
+  debconf:
+    name: "{{ item.name }}"
+    question: "{{ item.question }}"
+    value: "{{ item.value }}"
+    vtype: "{{ item.vtype | default ('select') }}"
+  no_log: yes
+  loop_control:
+    label: "{{ item.question }}"
+  loop:
+    - { name: mysql-apt-config, question: mysql-apt-config/select-product, value: Ok }
+    - { name: mysql-apt-config, question: mysql-apt-config/repo-codename, value: "{{ ansible_distribution_release }}" }
+    - { name: mysql-apt-config, question: mysql-apt-config/repo-distro, value: "{{ ansible_distribution | lower }}" }
+    - { name: mysql-apt-config, question: mysql-apt-config/preview-component, value: "", vtype: string }
+    - { name: mysql-apt-config, question: mysql-apt-config/select-preview, value: Disabled }
+    - { name: mysql-apt-config, question: mysql-apt-config/tools-component, value: mysql-tools, vtype: string }
+    - { name: mysql-apt-config, question: mysql-apt-config/select-tools, value: Enabled }
+    - { name: mysql-apt-config, question: mysql-apt-config/unsupported-platform, value: abort, }
+    - { name: mysql-apt-config, question: mysql-apt-config/dmr-warting, value: "", vtype: note }
+    - { name: mysql-apt-config, question: mysql-apt-config/repo-url, value: "http://repo.mysql.com/apt", vtype: string }
+    - { name: mysql-apt-config, question: mysql-apt-config/select-server, value: mysql-5.7 }
+    - { name: mysql-server, question: mysql-server/root_password, value: "{{ lookup('password', 'credentials/' + inventory_hostname + '/mysqlpassword length=14 chars=ascii_letters,digits,hexdigits') }}", vtype: 'password' }
+    - { name: mysql-server, question: mysql-server/root_password_again, value: "{{ lookup('password', 'credentials/' + inventory_hostname + '/mysqlpassword length=14 chars=ascii_letters,digits,hexdigits') }}", vtype: 'password' }
+
+- name: get mysql repo config
+  get_url:
+    url: http://repo.mysql.com/mysql-apt-config_0.8.15-1_all.deb
+    dest: /tmp/mysql-config.deb
+    checksum: "md5:4126e44e0867531a4724ab0c21d1d645"
+
+- name: setup mysql repo config
+  apt:
+    deb: /tmp/mysql-config.deb
+
+- name: update apt
+  apt:
+    update_cache: yes
+
+- name: MySQL install
+  apt:
+    name: "{{ items }}"
+    state: latest
+  vars:
+    items:
+    - mysql-client
+    - mysql-server
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: reset auth plugin for root
+  shell:
+    mysql -e "update mysql.user set plugin='mysql_native_password' where user='root' and host='localhost'; flush privileges;"
+
+- name: reset auth plugin for root
+  shell:
+    mysql -e "SET PASSWORD FOR 'root'@'localhost' = PASSWORD('$MYSQL_PASS'); FLUSH PRIVILEGES;"
+  environment:
+    MYSQL_PASS: "{{ lookup('password', 'credentials/' + inventory_hostname + '/mysqlpassword length=14 chars=ascii_letters,digits,hexdigits ') }}"
+  no_log: yes
+
+- name: MySQL | Config for easy access as root user
+  template: src=mysql_root.my.cnf.j2 dest=/root/.my.cnf
+  become: true
+
+- name: MySQL | Config for easy access as root user
+  template: src=mysql_root.my.cnf.j2 dest={{ ansible_env.HOME }}/.my.cnf
+  when: ansible_env.LOGNAME != 'root'
+
+- name: tune mysql
+  import_tasks: tune.yml
+
+- name: restart mysql server
+  service:
+    name: mysql
+    state: restarted

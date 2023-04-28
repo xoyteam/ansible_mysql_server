@@ -1,0 +1,15 @@
+---
+mysqlserver_config_path: "/etc/mysql/mysql.conf.d/mysqld.cnf"
+mysqlserver_config:
+  - { option: "innodb_flush_log_at_trx_commit", value: "2" }
+  - { option: "innodb_flush_method", value: "O_DIRECT" }
+
+# common replications
+#  - { option: "gtid_mode", value: "ON" }
+#  - { option: "enforce-gtid-consistency", value: "ON" }
+# for master replication
+#  - { option: "log_bin", value: "mysql-bin" }
+#  - { option: "log-slave-updates", value: "OFF" }
+#  - { option: "server_id", value: "1" }
+# for slave
+#  - { option: "server_id", value: "2" }

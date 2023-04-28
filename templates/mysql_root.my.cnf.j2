@@ -1,0 +1,2 @@
+[client]
+password={{ lookup('password', 'credentials/' + inventory_hostname + '/mysqlpassword length=14 chars=ascii_letters,digits,hexdigits ') }}
